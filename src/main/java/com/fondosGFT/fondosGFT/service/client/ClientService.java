@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -98,6 +100,7 @@ public class ClientService {
      * @return The updated {@link Client} object after saving to the database.
      */
     public Client updateCliente(Client cliente) {
+        // Assuming client.getId() is populated for an update
         return clientRepository.save(cliente);
     }
 
@@ -114,5 +117,36 @@ public class ClientService {
             return true; // Client found and deleted
         }
         return false; // Client not found
+    }
+
+    /**
+     * Retrieves a list of clients by their email address.
+     * Since email is expected to be unique, this will typically return a list with one or no clients.
+     *
+     * @param email The email address of the client(s) to retrieve.
+     * @return A {@link List} containing the {@link Client} if found, or an empty list if not.
+     */
+    public List<Client> getClientsByEmail(String email) {
+        return clientRepository.findByEmail(email).map(Arrays::asList).orElse(Collections.emptyList());
+    }
+
+    /**
+     * Retrieves a list of clients whose current balance is greater than or equal to a specified amount.
+     *
+     * @param amount The minimum balance amount to filter by.
+     * @return A {@link List} of {@link Client} objects matching the balance criteria.
+     */
+    public List<Client> getClientsWithBalanceGreaterThan(BigDecimal amount) {
+        return clientRepository.findByCurrentBalanceGreaterThanEqual(amount);
+    }
+
+    /**
+     * Retrieves a list of clients who have at least one active investment in the specified fund.
+     *
+     * @param fundId The unique ID of the fund.
+     * @return A {@link List} of {@link Client} objects with active investments in the given fund.
+     */
+    public List<Client> getClientsInFund(String fundId) {
+        return clientRepository.findByActiveInvestments_FundId(fundId);
     }
 }
