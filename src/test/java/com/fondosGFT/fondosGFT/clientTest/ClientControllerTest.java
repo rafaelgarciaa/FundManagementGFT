@@ -22,21 +22,42 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-@WebMvcTest(ClientController.class) // Prueba solo la capa web para ClientController
+/**
+ * Integration tests for the {@link ClientController}.
+ * This class uses {@code @WebMvcTest} to focus on testing the web layer,
+ * isolating the controller by mocking the service layer.
+ * It simulates HTTP requests and asserts on the controller's responses.
+ */
+@WebMvcTest(ClientController.class) // Tests only the web layer for ClientController
 class ClientControllerTest {
 
+    /**
+     * {@link MockMvc} is used to simulate HTTP requests to the controller.
+     */
     @Autowired
-    private MockMvc mockMvc; // Utilidad para simular peticiones HTTP
+    private MockMvc mockMvc;
 
-    @MockBean // Crea un mock del ClientService e lo inyecta en el contexto de Spring
+    /**
+     * {@link MockBean} creates a mock instance of {@link ClientService} and
+     * injects it into the Spring application context, replacing the actual service.
+     */
+    @MockBean
     private ClientService clientService;
 
+    /**
+     * {@link ObjectMapper} is used for converting Java objects to JSON and vice versa,
+     * necessary for handling request and response bodies.
+     */
     @Autowired
-    private ObjectMapper objectMapper; // Para convertir objetos Java a JSON y viceversa
+    private ObjectMapper objectMapper;
 
     private Client testClient1;
     private Client testClient2;
 
+    /**
+     * Sets up test data before each test method execution.
+     * Initializes two {@link Client} objects with sample data.
+     */
     @BeforeEach
     void setUp() {
         testClient1 = new Client();
@@ -50,19 +71,33 @@ class ClientControllerTest {
         testClient2.setEmail("bob@example.com");
     }
 
+    /**
+     * Tests the {@code getAllClients} endpoint.
+     * It mocks the service call to return a list of clients and asserts
+     * that the HTTP response is OK (200) and contains the expected JSON data.
+     *
+     * @throws Exception if an error occurs during the MVC perform operation.
+     */
     @Test
     void testGetAllClients() throws Exception {
         when(clientService.getAllClientes()).thenReturn(Arrays.asList(testClient1, testClient2));
 
-        mockMvc.perform(get("/api/clients")) // Simula una petición GET a /api/clients
-                .andExpect(status().isOk()) // Espera un código de estado 200 OK
-                .andExpect(jsonPath("$", hasSize(2))) // Espera una lista de 2 elementos
-                .andExpect(jsonPath("$[0].name", is(testClient1.getFirstName()))) // Verifica el nombre del primer cliente
-                .andExpect(jsonPath("$[1].email", is(testClient2.getEmail()))); // Verifica el email del segundo cliente
+        mockMvc.perform(get("/api/clients")) // Simulates a GET request to /api/clients
+                .andExpect(status().isOk()) // Expects a 200 OK status code
+                .andExpect(jsonPath("$", hasSize(2))) // Expects a list of 2 elements
+                .andExpect(jsonPath("$[0].firstName", is(testClient1.getFirstName()))) // Verifies the first client's first name
+                .andExpect(jsonPath("$[1].email", is(testClient2.getEmail()))); // Verifies the second client's email
 
-        verify(clientService, times(1)).getAllClientes(); // Verifica que el método del servicio fue llamado
+        verify(clientService, times(1)).getAllClientes(); // Verifies that the service method was called once
     }
 
+    /**
+     * Tests the {@code getClientById} endpoint when a client is found.
+     * It mocks the service call to return an {@link Optional} containing a client
+     * and asserts that the HTTP response is OK (200) with the correct client data.
+     *
+     * @throws Exception if an error occurs during the MVC perform operation.
+     */
     @Test
     void testGetClientByIdFound() throws Exception {
         when(clientService.getClienteById("clientId1")).thenReturn(Optional.of(testClient1));
@@ -70,21 +105,35 @@ class ClientControllerTest {
         mockMvc.perform(get("/api/clients/clientId1"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(testClient1.getId())))
-                .andExpect(jsonPath("$.name", is(testClient1.getFirstName())));
+                .andExpect(jsonPath("$.firstName", is(testClient1.getFirstName())));
 
         verify(clientService, times(1)).getClienteById("clientId1");
     }
 
+    /**
+     * Tests the {@code getClientById} endpoint when a client is not found.
+     * It mocks the service call to return an empty {@link Optional}
+     * and asserts that the HTTP response is Not Found (404).
+     *
+     * @throws Exception if an error occurs during the MVC perform operation.
+     */
     @Test
     void testGetClientByIdNotFound() throws Exception {
         when(clientService.getClienteById("nonExistentId")).thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/clients/nonExistentId"))
-                .andExpect(status().isNotFound()); // Espera un código de estado 404 Not Found
+                .andExpect(status().isNotFound()); // Expects a 404 Not Found status code
 
         verify(clientService, times(1)).getClienteById("nonExistentId");
     }
 
+    /**
+     * Tests the {@code createClient} endpoint.
+     * It simulates a POST request with a new client's data, mocks the service's save operation,
+     * and asserts that the HTTP response is Created (201) with the saved client's details.
+     *
+     * @throws Exception if an error occurs during the MVC perform operation.
+     */
     @Test
     void testCreateClient() throws Exception {
         Client newClient = new Client();
@@ -98,19 +147,27 @@ class ClientControllerTest {
 
         when(clientService.createCliente(any(Client.class))).thenReturn(savedClient);
 
-        mockMvc.perform(post("/api/clients") // Simula una petición POST a /api/clients
-                        .contentType(MediaType.APPLICATION_JSON) // Establece el tipo de contenido a JSON
-                        .content(objectMapper.writeValueAsString(newClient))) // Convierte el objeto a JSON
-                .andExpect(status().isCreated()) // Espera un código de estado 201 Created
+        mockMvc.perform(post("/api/clients") // Simulates a POST request to /api/clients
+                        .contentType(MediaType.APPLICATION_JSON) // Sets content type to JSON
+                        .content(objectMapper.writeValueAsString(newClient))) // Converts object to JSON
+                .andExpect(status().isCreated()) // Expects a 201 Created status code
                 .andExpect(jsonPath("$.id", is("newId123")))
-                .andExpect(jsonPath("$.name", is("Charlie")));
+                .andExpect(jsonPath("$.firstName", is("Charlie")));
 
         verify(clientService, times(1)).createCliente(any(Client.class));
     }
 
+    /**
+     * Tests the {@code updateClient} endpoint.
+     * It simulates a PUT request with updated client data, mocks the service's update operation,
+     * and asserts that the HTTP response is OK (200) with the modified client's details.
+     *
+     * @throws Exception if an error occurs during the MVC perform operation.
+     */
     @Test
     void testUpdateClient() throws Exception {
         Client updatedInfo = new Client();
+        updatedInfo.setId("clientId1"); // ID must be set for update mapping in service
         updatedInfo.setFirstName("Alice Modified");
         updatedInfo.setEmail("alice.modified@example.com");
 
@@ -119,23 +176,37 @@ class ClientControllerTest {
         returnedClient.setFirstName("Alice Modified");
         returnedClient.setEmail("alice.modified@example.com");
 
-        when(clientService.updateCliente(testClient2)).thenReturn(returnedClient);
+        // Mock the findById call, which typically precedes an update
+        when(clientService.getClienteById("clientId1")).thenReturn(Optional.of(testClient1));
+        // Mock the update call with the specific client instance
+        when(clientService.updateCliente(any(Client.class))).thenReturn(returnedClient);
 
-        mockMvc.perform(put("/api/clients/clientId1") // Simula una petición PUT
+
+        mockMvc.perform(put("/api/clients/clientId1") // Simulates a PUT request
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(updatedInfo)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.name", is("Alice Modified")));
+                .andExpect(jsonPath("$.firstName", is("Alice Modified")));
 
-        verify(clientService, times(1)).updateCliente(testClient1);
+        // Verify calls to both getClienteById (often done implicitly before update in real service)
+        // and updateCliente. The `any(Client.class)` is crucial here because the object
+        // passed to updateCliente might be different from `updatedInfo` but contains same data.
+        verify(clientService, times(1)).updateCliente(any(Client.class));
     }
 
+    /**
+     * Tests the {@code deleteClient} endpoint.
+     * It simulates a DELETE request, mocks the service's delete operation,
+     * and asserts that the HTTP response is No Content (204).
+     *
+     * @throws Exception if an error occurs during the MVC perform operation.
+     */
     @Test
     void testDeleteClient() throws Exception {
-        doNothing().when(clientService).deleteClient("clientId1"); // No hace nada al llamar deleteClient
+        when(clientService.deleteClient("clientId1")).thenReturn(true); // Mock successful deletion
 
-        mockMvc.perform(delete("/api/clients/clientId1")) // Simula una petición DELETE
-                .andExpect(status().isNoContent()); // Espera un código de estado 204 No Content
+        mockMvc.perform(delete("/api/clients/clientId1")) // Simulates a DELETE request
+                .andExpect(status().isNoContent()); // Expects a 204 No Content status code
 
         verify(clientService, times(1)).deleteClient("clientId1");
     }

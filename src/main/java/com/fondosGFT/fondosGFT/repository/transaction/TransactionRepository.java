@@ -1,6 +1,7 @@
 package com.fondosGFT.fondosGFT.repository.transaction;
 
-import com.pruebagft.gestionFondosGFT.model.transaction.Transaction;
+
+import com.fondosGFT.fondosGFT.model.transaction.Transaction;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 

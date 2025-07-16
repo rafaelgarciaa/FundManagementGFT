@@ -3,13 +3,14 @@ package com.fondosGFT.fondosGFT.service.transaction;
 import com.fondosGFT.fondosGFT.model.client.Client;
 import com.fondosGFT.fondosGFT.model.fund.Fund;
 import com.fondosGFT.fondosGFT.model.investment.Investment;
+import com.fondosGFT.fondosGFT.model.transaction.Transaction;
 import com.fondosGFT.fondosGFT.repository.client.ClientRepository;
 import com.fondosGFT.fondosGFT.repository.fund.FundRepository;
 import com.fondosGFT.fondosGFT.repository.transaction.TransactionRepository;
 import com.fondosGFT.fondosGFT.service.notification.NotificationService;
-import com.pruebagft.gestionFondosGFT.util.NotificationRequest;
+import com.fondosGFT.fondosGFT.util.NotificationRequest;
+import com.fondosGFT.fondosGFT.util.enums.TransactionType;
 import com.pruebagft.gestionFondosGFT.util.enums.NotificationType;
-import com.pruebagft.gestionFondosGFT.util.enums.TransactionType;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -22,6 +23,16 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Service class responsible for managing financial transactions related to investment funds.
+ * This includes handling fund subscriptions, cancellations, and retrieving transaction history.
+ * It coordinates operations across client, fund, and transaction repositories, and also
+ * integrates with the {@link NotificationService}.
+ * <p>
+ * {@code @Service} indicates that this class is a Spring service component.
+ * {@code @Slf4j} provides a logger instance named 'log' for logging messages.
+ * </p>
+ */
 @Service
 @Slf4j
 public class TransactionService {
@@ -32,12 +43,22 @@ public class TransactionService {
     private final NotificationService notificationService;
     private final MongoTemplate mongoTemplate;
 
+    /**
+     * Constructs a new TransactionService with the required repositories and services.
+     * Spring's dependency injection automatically provides these instances.
+     *
+     * @param clientRepository      The repository for managing client data.
+     * @param fundRepository        The repository for managing fund data.
+     * @param transactionRepository The repository for managing transaction data.
+     * @param notificationService   The service for sending notifications.
+     * @param mongoTemplate         The MongoTemplate for advanced MongoDB operations.
+     */
     @Autowired
     public TransactionService(
-            ClientRepository clientRepository, // Renombrado
-            FundRepository fundRepository,     // Renombrado
-            TransactionRepository transactionRepository, // Renombrado
-            NotificationService notificationService, // Renombrado
+            ClientRepository clientRepository,
+            FundRepository fundRepository,
+            TransactionRepository transactionRepository,
+            NotificationService notificationService,
             MongoTemplate mongoTemplate) {
         this.clientRepository = clientRepository;
         this.fundRepository = fundRepository;
@@ -47,46 +68,49 @@ public class TransactionService {
     }
 
     /**
-     * Permite a un cliente suscribirse a un fondo.
+     * Allows a client to subscribe to an investment fund with a specified amount.
+     * This method performs necessary business validations, updates client balance and investments,
+     * records the transaction, and sends a notification.
      *
-     * @param clientId ID del cliente.
-     * @param fundId   ID del fondo.
-     * @param amount   Monto a suscribir.
-     * @return Transaction creada.
-     * @throws RuntimeException si hay errores de validación o no se encuentra el cliente/fondo.
+     * @param clientId The ID of the client initiating the subscription.
+     * @param fundId   The ID of the fund to subscribe to.
+     * @param amount   The amount to be subscribed.
+     * @return The created {@link Transaction} record.
+     * @throws RuntimeException if validation errors occur (e.g., client/fund not found,
+     * insufficient balance, amount below minimum, or client already subscribed).
      */
     @Transactional
-    public com.pruebagft.gestionFondosGFT.model.transaction.Transaction subscribeFund(String clientId, String fundId, BigDecimal amount) { // Renombrado
-        log.info("Iniciando suscripción: ClientID={}, FundID={}, Monto={}", clientId, fundId, amount);
+    public Transaction subscribeFund(String clientId, String fundId, BigDecimal amount) {
+        log.info("Initiating subscription: ClientID={}, FundID={}, Amount={}", clientId, fundId, amount);
 
-        // 1. Obtener Client y Fund
+        // Retrieve Client and Fund
         Client client = clientRepository.findById(clientId)
-                .orElseThrow(() -> new RuntimeException("Client no encontrado con ID: " + clientId));
+                .orElseThrow(() -> new RuntimeException("Client not found with ID: " + clientId));
         Fund fund = fundRepository.findById(fundId)
-                .orElseThrow(() -> new RuntimeException("Fund no encontrado con ID: " + fundId));
+                .orElseThrow(() -> new RuntimeException("Fund not found with ID: " + fundId));
 
-        // 2. Validaciones de Negocio
+        // Business Validations
         if (amount.compareTo(fund.getMinimumSubscriptionAmount()) < 0) {
-            String errorMessage = "El monto ingresado para suscripción (" + amount + ") es menor al monto mínimo del fondo (" + fund.getMinimumSubscriptionAmount() + ").";
+            String errorMessage = "The subscription amount (" + amount + ") is less than the fund's minimum amount (" + fund.getMinimumSubscriptionAmount() + ").";
             log.warn(errorMessage);
             throw new RuntimeException(errorMessage);
         }
         if (client.getCurrentBalance().compareTo(amount) < 0) {
-            String errorMessage = "Saldo insuficiente. Saldo actual: " + client.getCurrentBalance() + ", Monto de suscripción: " + amount;
+            String errorMessage = "Insufficient balance. Current balance: " + client.getCurrentBalance() + ", Subscription amount: " + amount;
             log.warn(errorMessage);
             throw new RuntimeException(errorMessage);
         }
-        // Verificar si el client ya tiene una inversión activa en este fund
+        // Check if the client already has an active investment in this fund
         boolean alreadySubscribed = client.getActiveInvestments().stream()
                 .anyMatch(inv -> inv.getFundId().equals(fundId));
         if (alreadySubscribed) {
-            String errorMessage = "El cliente ya tiene una inversión activa en el fondo " + fund.getName();
+            String errorMessage = "The client already has an active investment in fund " + fund.getName();
             log.warn(errorMessage);
             throw new RuntimeException(errorMessage);
         }
 
-        // 3. Crear Registro de Transaction
-        com.pruebagft.gestionFondosGFT.model.transaction.Transaction transaction = new com.pruebagft.gestionFondosGFT.model.transaction.Transaction();
+        // Create Transaction Record
+        Transaction transaction = new Transaction();
         transaction.setBusinessTransactionId(UUID.randomUUID().toString());
         transaction.setClientId(client.getId());
         transaction.setFundId(fund.getId());
@@ -94,32 +118,32 @@ public class TransactionService {
         transaction.setType(TransactionType.SUSCRIPTION);
         transaction.setAmount(amount);
         transaction.setDate(LocalDateTime.now());
-        transaction.setStatus("COMPLETADA");
+        transaction.setStatus("COMPLETED");
         transaction.setClientBalanceBefore(client.getCurrentBalance());
 
-        // 4. Actualizar Saldo del Client y Añadir Investment
+        // Update Client Balance and Add Investment
         client.setCurrentBalance(client.getCurrentBalance().subtract(amount));
-        Investment newInvestment = new Investment( // Renombrado
+        Investment newInvestment = new Investment(
                 fund.getId(),
                 fund.getName(),
                 amount,
-                amount,
+                amount, // Current amount is initially the same as initial amount
                 transaction.getDate(),
                 transaction.getBusinessTransactionId()
         );
-        client.getActiveInvestments().add(newInvestment); // Usando newInvestment
+        client.getActiveInvestments().add(newInvestment);
         clientRepository.save(client);
 
         transaction.setClientBalanceAfter(client.getCurrentBalance());
-        com.pruebagft.gestionFondosGFT.model.transaction.Transaction savedTransaction = transactionRepository.save(transaction); // Renombrado
+        Transaction savedTransaction = transactionRepository.save(transaction);
 
-        // 5. Enviar Notificación (¡CAMBIOS AQUÍ PARA USAR email y phoneNumber!)
+        // Prepare and Send Notification
         String notificationMessage = String.format(
-                "Estimado %s %s, su suscripción al fondo %s ha sido exitosa por un monto de COP %.2f. " +
-                        "Su nuevo saldo disponible es COP %.2f.",
+                "Dear %s %s, your subscription to fund %s has been successful for an amount of COP %.2f. " +
+                        "Your new available balance is COP %.2f.",
                 client.getFirstName(), client.getLastName(), fund.getName(), amount, client.getCurrentBalance()
         );
-        String emailSubject = "Confirmación de Suscripción a Fondo";
+        String emailSubject = "Fund Subscription Confirmation";
 
         NotificationRequest notification = NotificationRequest.builder()
                 .subject(emailSubject)
@@ -127,61 +151,65 @@ public class TransactionService {
                 .type(client.getNotificationPreference())
                 .build();
 
-        // Asignar el destinatario según la preferencia
+        // Assign addressee based on preference and send
         if (client.getNotificationPreference() == NotificationType.EMAIL) {
             if (client.getEmail() == null || client.getEmail().isEmpty()) {
-                log.warn("Cliente {} prefiere email, pero no tiene una dirección de email registrada. No se enviará notificación.", client.getId());
+                log.warn("Client {} prefers email, but has no registered email address. No notification will be sent.", client.getId());
             } else {
                 notification.setAddressee(client.getEmail());
                 notificationService.sendNotification(notification);
             }
         } else if (client.getNotificationPreference() == NotificationType.SMS) {
             if (client.getPhoneNumber() == null || client.getPhoneNumber().isEmpty()) {
-                log.warn("Cliente {} prefiere SMS, pero no tiene un número de teléfono registrado. No se enviará notificación.", client.getId());
+                log.warn("Client {} prefers SMS, but has no registered phone number. No notification will be sent.", client.getId());
             } else {
                 notification.setAddressee(client.getPhoneNumber());
                 notificationService.sendNotification(notification);
             }
         } else {
-            log.info("Cliente {} no desea notificaciones.", client.getId());
+            log.info("Client {} does not wish to receive notifications.", client.getId());
         }
 
-        log.info("Suscripción completada y notificación enviada para ClientID={}, FundID={}", clientId, fundId);
+        log.info("Subscription completed and notification sent for ClientID={}, FundID={}", clientId, fundId);
         return savedTransaction;
     }
 
     /**
-     * Permite a un cliente cancelar la totalidad de su suscripción a un fondo.
+     * Allows a client to cancel their entire subscription to a specific fund.
+     * This method validates the existence of the investment, reverses the amount,
+     * updates client balance and removes the investment, records the cancellation transaction,
+     * and sends a notification.
      *
-     * @param clientId ID del cliente.
-     * @param fundId   ID del fondo a cancelar.
-     * @return Transaction creada.
-     * @throws RuntimeException si hay errores de validación o no se encuentra la inversión.
+     * @param clientId The ID of the client initiating the cancellation.
+     * @param fundId   The ID of the fund for which the subscription is to be cancelled.
+     * @return The created {@link Transaction} record for the cancellation.
+     * @throws RuntimeException if validation errors occur (e.g., client not found,
+     * or no active investment found for the specified fund).
      */
     @Transactional
-    public com.pruebagft.gestionFondosGFT.model.transaction.Transaction cancelFund(String clientId, String fundId) { // Renombrado
-        log.info("Iniciando cancelación: ClientID={}, FundID={}", clientId, fundId);
+    public Transaction cancelFund(String clientId, String fundId) {
+        log.info("Initiating cancellation: ClientID={}, FundID={}", clientId, fundId);
 
-        // 1. Obtener Client
+        // Retrieve Client
         Client client = clientRepository.findById(clientId)
-                .orElseThrow(() -> new RuntimeException("Client no encontrado con ID: " + clientId));
+                .orElseThrow(() -> new RuntimeException("Client not found with ID: " + clientId));
 
-        // 2. Encontrar la inversión activa del cliente para este fondo
-        Optional<Investment> investmentOptional = client.getActiveInvestments().stream() // Renombrado
+        // Find the client's active investment for this fund
+        Optional<Investment> investmentOptional = client.getActiveInvestments().stream()
                 .filter(inv -> inv.getFundId().equals(fundId))
                 .findFirst();
 
         if (investmentOptional.isEmpty()) {
-            String errorMessage = "El cliente no tiene una inversión activa en el fondo con ID: " + fundId;
+            String errorMessage = "Client does not have an active investment in fund with ID: " + fundId;
             log.warn(errorMessage);
             throw new RuntimeException(errorMessage);
         }
 
-        Investment investmentToCancel = investmentOptional.get(); // Renombrado
-        BigDecimal amountToReturn = investmentToCancel.getInitialAmountInvested(); // Renombrado
+        Investment investmentToCancel = investmentOptional.get();
+        BigDecimal amountToReturn = investmentToCancel.getInitialAmountInvested();
 
-        // 3. Crear Registro de Transaction de Cancelación
-        com.pruebagft.gestionFondosGFT.model.transaction.Transaction transaction = new com.pruebagft.gestionFondosGFT.model.transaction.Transaction();
+        // Create Cancellation Transaction Record
+        Transaction transaction = new Transaction();
         transaction.setBusinessTransactionId(UUID.randomUUID().toString());
         transaction.setClientId(client.getId());
         transaction.setFundId(investmentToCancel.getFundId());
@@ -189,24 +217,24 @@ public class TransactionService {
         transaction.setType(TransactionType.CANCELATION);
         transaction.setAmount(amountToReturn);
         transaction.setDate(LocalDateTime.now());
-        transaction.setStatus("COMPLETADA");
+        transaction.setStatus("COMPLETED");
         transaction.setClientBalanceBefore(client.getCurrentBalance());
 
-        // 4. Actualizar Saldo del Client y Eliminar Investment
+        // Update Client Balance and Remove Investment
         client.setCurrentBalance(client.getCurrentBalance().add(amountToReturn));
-        client.getActiveInvestments().remove(investmentToCancel); // Usando investmentToCancel
+        client.getActiveInvestments().remove(investmentToCancel);
         clientRepository.save(client);
 
         transaction.setClientBalanceAfter(client.getCurrentBalance());
-        com.pruebagft.gestionFondosGFT.model.transaction.Transaction savedTransaction = transactionRepository.save(transaction);
+        Transaction savedTransaction = transactionRepository.save(transaction);
 
-        // 5. Enviar Notificación (¡CAMBIOS AQUÍ PARA USAR email y phoneNumber!)
+        // Prepare and Send Notification
         String notificationMessage = String.format(
-                "Estimado %s %s, la cancelación de su suscripción al fondo %s ha sido exitosa. " +
-                        "Se ha retornado COP %.2f a su cuenta. Su nuevo saldo disponible es COP %.2f.",
+                "Dear %s %s, the cancellation of your subscription to fund %s has been successful. " +
+                        "COP %.2f has been returned to your account. Your new available balance is COP %.2f.",
                 client.getFirstName(), client.getLastName(), investmentToCancel.getFundName(), amountToReturn, client.getCurrentBalance()
         );
-        String emailSubject = "Confirmación de Cancelación de Suscripción";
+        String emailSubject = "Subscription Cancellation Confirmation";
 
         NotificationRequest notification = NotificationRequest.builder()
                 .subject(emailSubject)
@@ -214,56 +242,65 @@ public class TransactionService {
                 .type(client.getNotificationPreference())
                 .build();
 
-        // Asignar el destinatario según la preferencia
+        // Assign addressee based on preference and send
         if (client.getNotificationPreference() == NotificationType.EMAIL) {
             if (client.getEmail() == null || client.getEmail().isEmpty()) {
-                log.warn("Cliente {} prefiere email, pero no tiene una dirección de email registrada. No se enviará notificación.", client.getId());
+                log.warn("Client {} prefers email, but has no registered email address. No notification will be sent.", client.getId());
             } else {
                 notification.setAddressee(client.getEmail());
                 notificationService.sendNotification(notification);
             }
         } else if (client.getNotificationPreference() == NotificationType.SMS) {
             if (client.getPhoneNumber() == null || client.getPhoneNumber().isEmpty()) {
-                log.warn("Cliente {} prefiere SMS, pero no tiene un número de teléfono registrado. No se enviará notificación.", client.getId());
+                log.warn("Client {} prefers SMS, but has no registered phone number. No notification will be sent.", client.getId());
             } else {
                 notification.setAddressee(client.getPhoneNumber());
                 notificationService.sendNotification(notification);
             }
         } else {
-            log.info("Cliente {} no desea notificaciones.", client.getId());
+            log.info("Client {} does not wish to receive notifications.", client.getId());
         }
 
-        log.info("Cancelación completada y notificación enviada para ClientID={}, FundID={}", clientId, fundId);
+        log.info("Cancellation completed and notification sent for ClientID={}, FundID={}", clientId, fundId);
         return savedTransaction;
     }
 
     /**
-     * Obtiene el historial de transacciones para un cliente específico.
+     * Retrieves the transaction history for a specific client, ordered by date in descending order.
      *
-     * @param clientId ID del cliente.
-     * @return Lista de transacciones.
+     * @param clientId The ID of the client whose transaction history is requested.
+     * @return A {@link List} of {@link Transaction} objects representing the client's historical transactions.
      */
-    public List<com.pruebagft.gestionFondosGFT.model.transaction.Transaction> getTransactionsHistory(String clientId) {
+    public List<Transaction> getTransactionsHistory(String clientId) {
         return transactionRepository.findByClientIdOrderByDateDesc(clientId);
     }
 
-    public com.pruebagft.gestionFondosGFT.model.transaction.Transaction createTransaction(com.pruebagft.gestionFondosGFT.model.transaction.Transaction transaction) {
+    /**
+     * Creates and saves a new transaction record.
+     * This method can be used for recording general transactions. It automatically generates
+     * a business transaction ID if one is not provided and sets the transaction date if null.
+     *
+     * @param transaction The {@link Transaction} object to be saved.
+     * @return The saved {@link Transaction} object, including any database-generated ID.
+     * @throws IllegalArgumentException if the provided transaction object is null.
+     */
+    public Transaction createTransaction(Transaction transaction) {
         if (transaction == null) {
-            throw new IllegalArgumentException("La transacción no puede ser nula.");
+            throw new IllegalArgumentException("Transaction cannot be null.");
         }
 
-        // Si no tiene un ID de negocio, generar uno
+        // If no business ID is provided, generate one
         if (transaction.getBusinessTransactionId() == null || transaction.getBusinessTransactionId().isEmpty()) {
             transaction.setBusinessTransactionId(UUID.randomUUID().toString());
         }
 
-        // Asegurarse de que la fecha esté establecida si no lo está (o es nula)
+        // Ensure the date is set if not already (or is null)
         if (transaction.getDate() == null) {
             transaction.setDate(LocalDateTime.now());
         }
 
-        log.info("Creando registro de transacción: Tipo={}, ClienteID={}, FondoID={}, Monto={}",
-                transaction.getType(), transaction.getClientId(), transaction.getFundId(), transaction.getAmount());
+        log.info("Creating transaction record: Type={}, ClientID={}, FundID={}, Amount={}"
+        );
 
         return transactionRepository.save(transaction);
     }

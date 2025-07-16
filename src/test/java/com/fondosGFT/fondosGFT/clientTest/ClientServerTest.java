@@ -17,136 +17,213 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class) // Habilita Mockito para JUnit 5
+/**
+ * Unit tests for the {@link ClientService}.
+ * This class uses Mockito to isolate the service layer from its dependencies (like {@link ClientRepository}),
+ * allowing for focused testing of the service's business logic.
+ * <p>
+ * {@code @ExtendWith(MockitoExtension.class)} enables Mockito annotations for JUnit 5.
+ * </p>
+ */
+@ExtendWith(MockitoExtension.class) // Enables Mockito for JUnit 5
 class ClientServiceTest {
 
-    @Mock // Crea un mock del ClientRepository
+    /**
+     * {@code @Mock} creates a mock instance of {@link ClientRepository}.
+     * This mock will simulate the behavior of the actual repository.
+     */
+    @Mock
     private ClientRepository clientRepository;
 
-    @InjectMocks // Inyecta los mocks en ClientService
+    /**
+     * {@code @InjectMocks} injects the created mocks (like {@link ClientRepository})
+     * into the {@link ClientService} instance under test.
+     */
+    @InjectMocks
     private ClientService clientService;
 
-    // Puedes inicializar objetos de prueba aquí si son comunes para varios tests
     private Client testClient1;
     private Client testClient2;
 
+    /**
+     * Sets up test data before each test method execution.
+     * Initializes two {@link Client} objects with sample data for consistent testing.
+     */
     @BeforeEach
     void setUp() {
-        // Inicializa los clientes de prueba antes de cada test
+        // Initialize test clients before each test
         testClient1 = new Client();
         testClient1.setId("client1");
         testClient1.setFirstName("Alice");
         testClient1.setEmail("alice@example.com");
-        // Otros campos si existen
+        // Other fields if they exist
 
         testClient2 = new Client();
         testClient2.setId("client2");
         testClient2.setFirstName("Bob");
         testClient2.setEmail("bob@example.com");
-        // Otros campos si existen
+        // Other fields if they exist
     }
 
+    /**
+     * Tests the {@code getAllClientes} method.
+     * It verifies that the service correctly retrieves all clients by mocking the repository's {@code findAll()} method.
+     */
     @Test
     void testGetAllClients() {
-        // Configura el comportamiento del mock
+        // Configure the mock's behavior
         when(clientRepository.findAll()).thenReturn(Arrays.asList(testClient1, testClient2));
 
-        // Llama al método que estamos probando
+        // Call the method being tested
         List<Client> clients = clientService.getAllClientes();
 
-        // Verifica el resultado
+        // Verify the result
         assertNotNull(clients);
         assertEquals(2, clients.size());
         assertEquals(testClient1.getFirstName(), clients.get(0).getFirstName());
         assertEquals(testClient2.getFirstName(), clients.get(1).getFirstName());
 
-        // Verifica que el método del repositorio fue llamado exactamente una vez
+        // Verify that the repository's method was called exactly once
         verify(clientRepository, times(1)).findAll();
     }
 
+    /**
+     * Tests the {@code getClienteById} method when a client is found.
+     * It mocks the repository's {@code findById()} method to return an {@link Optional}
+     * containing the test client and asserts that the service returns it correctly.
+     */
     @Test
     void testGetClientByIdFound() {
-        // Configura el comportamiento del mock para un cliente encontrado
+        // Configure the mock's behavior for a found client
         when(clientRepository.findById("client1")).thenReturn(Optional.of(testClient1));
 
-        // Llama al método
+        // Call the method
         Optional<Client> foundClient = clientService.getClienteById("client1");
 
-        // Verifica
+        // Verify the result
         assertTrue(foundClient.isPresent());
         assertEquals(testClient1.getFirstName(), foundClient.get().getFirstName());
         verify(clientRepository, times(1)).findById("client1");
     }
 
+    /**
+     * Tests the {@code getClienteById} method when a client is not found.
+     * It mocks the repository's {@code findById()} method to return an empty {@link Optional}
+     * and asserts that the service correctly returns an empty Optional.
+     */
     @Test
     void testGetClientByIdNotFound() {
-        // Configura el comportamiento del mock para un cliente no encontrado
+        // Configure the mock's behavior for a not-found client
         when(clientRepository.findById("nonExistent")).thenReturn(Optional.empty());
 
-        // Llama al método
+        // Call the method
         Optional<Client> foundClient = clientService.getClienteById("nonExistent");
 
-        // Verifica
+        // Verify the result
         assertFalse(foundClient.isPresent());
         verify(clientRepository, times(1)).findById("nonExistent");
     }
 
+    /**
+     * Tests the {@code createCliente} method.
+     * It mocks the repository's {@code save()} method to return the saved client
+     * and asserts that the service correctly persists the new client.
+     */
     @Test
     void testCreateClient() {
-        // Configura el comportamiento del mock al guardar un nuevo cliente
-        when(clientRepository.save(any(Client.class))).thenReturn(testClient1); // Simula que save devuelve el cliente guardado
+        // Configure the mock's behavior when saving a new client
+        when(clientRepository.save(any(Client.class))).thenReturn(testClient1); // Simulates that save returns the saved client
 
-        // Llama al método
+        // Call the method
         Client createdClient = clientService.createCliente(testClient1);
 
-        // Verifica
+        // Verify the result
         assertNotNull(createdClient);
         assertEquals(testClient1.getFirstName(), createdClient.getFirstName());
         verify(clientRepository, times(1)).save(testClient1);
     }
 
+    /**
+     * Tests the {@code updateCliente} method for a successful update.
+     * It mocks the repository's {@code findById()} (if used internally by update)
+     * and {@code save()} methods, and asserts that the client's information is updated.
+     */
     @Test
     void testUpdateClientSuccess() {
         Client updatedInfo = new Client();
+        updatedInfo.setId("client1"); // Important for the findById in the service logic
         updatedInfo.setFirstName("Alice Updated");
         updatedInfo.setEmail("alice.updated@example.com");
 
-        when(clientRepository.findById("client1")).thenReturn(Optional.of(testClient1));
-        when(clientRepository.save(any(Client.class))).thenReturn(updatedInfo); // Simula el guardado de la actualización
+        when(clientRepository.findById("client1")).thenReturn(Optional.of(testClient1)); // Mock the initial retrieval
+        when(clientRepository.save(any(Client.class))).thenReturn(updatedInfo); // Simulate the saving of the update
 
         Client result = clientService.updateCliente(updatedInfo);
 
         assertNotNull(result);
         assertEquals("Alice Updated", result.getFirstName());
         assertEquals("alice.updated@example.com", result.getEmail());
-        verify(clientRepository, times(1)).findById("client1");
-        verify(clientRepository, times(1)).save(any(Client.class)); // Verifica que save fue llamado
+        verify(clientRepository, times(1)).save(any(Client.class)); // Verify that save was called
     }
 
+    /**
+     * Tests the {@code updateCliente} method when the client to update is not found.
+     * It mocks {@code findById()} to return empty and asserts that a {@link RuntimeException} is thrown.
+     */
     @Test
     void testUpdateClientNotFound() {
         Client updatedInfo = new Client();
-        updatedInfo.setFirstName("Alice Updated");
+        updatedInfo.setId("nonExistent"); // Set ID for the method call
 
         when(clientRepository.findById("nonExistent")).thenReturn(Optional.empty());
 
-        assertThrows(RuntimeException.class, () -> { // Asumiendo que ClientService lanza RuntimeException
+        // Assuming ClientService throws RuntimeException if client not found for update
+        assertThrows(RuntimeException.class, () -> {
             clientService.updateCliente(updatedInfo);
         });
         verify(clientRepository, times(1)).findById("nonExistent");
-        verify(clientRepository, never()).save(any(Client.class)); // Asegura que save no fue llamado
+        verify(clientRepository, never()).save(any(Client.class)); // Ensure save was never called
     }
 
 
+    /**
+     * Tests the {@code deleteClient} method.
+     * It mocks the repository's {@code deleteById()} method and verifies that
+     * the service calls it. It also mocks {@code findById()} to simulate a found client.
+     */
     @Test
     void testDeleteClient() {
-        // Configura el mock para que no haga nada cuando se llame a deleteById
+        // Configure the mock to return a client for findById before deletion
+        when(clientRepository.findById("client1")).thenReturn(Optional.of(testClient1));
+        // Configure the mock so that deleteById does nothing when called with "client1"
         doNothing().when(clientRepository).deleteById("client1");
 
-        // Llama al método
-        clientService.deleteClient("client1");
+        // Call the method
+        boolean isDeleted = clientService.deleteClient("client1");
 
-        // Verifica que el método del repositorio fue llamado
+        // Verify the result
+        assertTrue(isDeleted);
+        // Verify that the repository's methods were called
+        verify(clientRepository, times(1)).findById("client1");
         verify(clientRepository, times(1)).deleteById("client1");
+    }
+
+    /**
+     * Tests the {@code deleteClient} method when the client to delete is not found.
+     * It mocks {@code findById()} to return empty and asserts that deletion is reported as false.
+     */
+    @Test
+    void testDeleteClientNotFound() {
+        // Configure the mock to return an empty Optional for findById
+        when(clientRepository.findById("nonExistent")).thenReturn(Optional.empty());
+
+        // Call the method
+        boolean isDeleted = clientService.deleteClient("nonExistent");
+
+        // Verify the result
+        assertFalse(isDeleted);
+        // Verify that findById was called, but deleteById was not
+        verify(clientRepository, times(1)).findById("nonExistent");
+        verify(clientRepository, never()).deleteById(anyString());
     }
 }
