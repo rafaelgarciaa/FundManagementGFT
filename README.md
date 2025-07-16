@@ -13,6 +13,8 @@ Spring Data MongoDB: Módulo de Spring para una fácil integración y acceso a M
 
 Lombok: Librería que reduce el código repetitivo (boilerplate) en clases Java, generando automáticamente getters, setters, constructores, etc.
 
+AWS EC2, con el respectivo despliegue en la IPV4 publica: 3.144.192.51
+
 AWS SDK para Java (v2):
 
 AWS SES (Simple Email Service): Utilizado para el envío de notificaciones por correo electrónico.
