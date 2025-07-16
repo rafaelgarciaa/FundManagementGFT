@@ -246,4 +246,25 @@ public class TransactionService {
     public List<com.pruebagft.gestionFondosGFT.model.transaction.Transaction> getTransactionsHistory(String clientId) {
         return transactionRepository.findByClientIdOrderByDateDesc(clientId);
     }
+
+    public com.pruebagft.gestionFondosGFT.model.transaction.Transaction createTransaction(com.pruebagft.gestionFondosGFT.model.transaction.Transaction transaction) {
+        if (transaction == null) {
+            throw new IllegalArgumentException("La transacción no puede ser nula.");
+        }
+
+        // Si no tiene un ID de negocio, generar uno
+        if (transaction.getBusinessTransactionId() == null || transaction.getBusinessTransactionId().isEmpty()) {
+            transaction.setBusinessTransactionId(UUID.randomUUID().toString());
+        }
+
+        // Asegurarse de que la fecha esté establecida si no lo está (o es nula)
+        if (transaction.getDate() == null) {
+            transaction.setDate(LocalDateTime.now());
+        }
+
+        log.info("Creando registro de transacción: Tipo={}, ClienteID={}, FondoID={}, Monto={}",
+                transaction.getType(), transaction.getClientId(), transaction.getFundId(), transaction.getAmount());
+
+        return transactionRepository.save(transaction);
+    }
 }

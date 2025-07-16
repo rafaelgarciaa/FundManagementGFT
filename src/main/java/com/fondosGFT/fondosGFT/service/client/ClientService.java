@@ -54,4 +54,13 @@ public class ClientService {
     public Client updateCliente(Client cliente) {
         return clientRepository.save(cliente);
     }
+
+    public boolean deleteClient(String id) {
+        Optional<Client> clientOptional = clientRepository.findById(id);
+        if (clientOptional.isPresent()) {
+            clientRepository.deleteById(id);
+            return true; // Cliente encontrado y eliminado
+        }
+        return false; // Cliente no encontrado
+    }
 }

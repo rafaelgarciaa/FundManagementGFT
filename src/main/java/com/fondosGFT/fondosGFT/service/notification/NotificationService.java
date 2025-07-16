@@ -1,5 +1,6 @@
 package com.fondosGFT.fondosGFT.service.notification;
 
+import com.fondosGFT.fondosGFT.model.client.Client;
 import com.pruebagft.gestionFondosGFT.util.NotificationRequest;
 import com.pruebagft.gestionFondosGFT.util.enums.NotificationType;
 import io.awspring.cloud.ses.SimpleEmailServiceMailSender;
