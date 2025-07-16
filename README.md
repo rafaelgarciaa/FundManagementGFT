@@ -7,7 +7,7 @@ Java 17: Versión del lenguaje de programación Java utilizada.
 
 Maven: Herramienta para la gestión de dependencias y la construcción del proyecto.
 
-MongoDB: Base de datos NoSQL utilizada para el almacenamiento de datos flexible y escalable.
+MongoDB: Base de datos NoSQL utilizada para el almacenamiento de datos flexible y escalable, utilizando MongoDB Atlas, con entorno MongoDB compass.
 
 Spring Data MongoDB: Módulo de Spring para una fácil integración y acceso a MongoDB.
 
